@@ -858,7 +858,7 @@ const App = () => {
 
       <section id="home" className="hero-section">
         <video autoPlay loop muted playsInline id="hero-video">
-          <source src="C:\Users\91901\Downloads\SIH\Vision\Video.mp4" type="video/mp4" />
+          <source src="AI_Powered_Agricultural_Video_Generation.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
         <div className="container">
