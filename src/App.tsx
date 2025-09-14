@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import axios from 'axios';
 
 // Extend the Window interface to include Google Translate functions
 declare global {
@@ -11,8 +12,73 @@ declare global {
           elementId: string
         ) => unknown;
       };
+      accounts: {
+        id: {
+          initialize: (config: any) => void;
+          renderButton: (element: HTMLElement, options: any) => void;
+          prompt: () => void;
+        };
+      };
     };
   }
+}
+
+// API base URL
+const API_BASE_URL = 'http://localhost:5000/api';
+
+interface User {
+  _id?: string;
+  name: string;
+  email: string;
+  role: string;
+  location?: {
+    address: string;
+    latitude: number;
+    longitude: number;
+    region: string;
+  };
+  farmDetails?: {
+    totalArea: number;
+    soilType: string;
+    primaryCrops: string[];
+    irrigationSystem: string;
+  };
+}
+
+interface PredictionInput {
+  cropType: string;
+  area: number;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  soilType?: string;
+  rainfall?: number;
+  temperature?: number;
+  humidity?: number;
+}
+
+interface PredictionResult {
+  yield: number;
+  perAcre: number;
+  confidence: number;
+  location: string;
+  weather: {
+    temperature: number;
+    rainfall: number;
+    humidity: number;
+  };
+  soil: {
+    type: string;
+    ph: number;
+    nitrogen: number;
+  };
+  recommendations: {
+    irrigation: string;
+    fertilization: string;
+    pestControl: string;
+    harvestTiming: string;
+  };
 }
 
 const App = () => {
@@ -23,10 +89,199 @@ const App = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [currentLanguage, setCurrentLanguage] = useState('en');
   const [greetingPlayed, setGreetingPlayed] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ 
+    name: '', 
+    email: '', 
+    password: '', 
+    confirmPassword: '' 
+  });
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [weatherData, setWeatherData] = useState({
+    temperature: 32,
+    humidity: 78,
+    rainfall: 45
+  });
   const languageSelectRef = useRef<HTMLSelectElement>(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
-  // Function to handle chatbot messages
-  const handleSendMessage = () => {
+  // Check if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      setIsLoggedIn(true);
+      setUser(JSON.parse(userData));
+    }
+  }, []);
+
+  // Initialize Google Sign-In
+  useEffect(() => {
+    const initializeGoogleSignIn = () => {
+      if (window.google && googleButtonRef.current) {
+        window.google.accounts.id.initialize({
+          client_id: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
+          callback: handleGoogleSignIn
+        });
+        window.google.accounts.id.renderButton(
+          googleButtonRef.current,
+          { theme: 'outline', size: 'large' }
+        );
+      }
+    };
+
+    // Load Google Sign-In script
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.onload = initializeGoogleSignIn;
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
+  const handleGoogleSignIn = (response: any) => {
+    // Handle Google sign-in response
+    console.log('Google sign-in response:', response);
+    // You would typically send this to your backend for verification
+    const userData = {
+      name: response.name,
+      email: response.email,
+      role: 'farmer'
+    };
+    
+    localStorage.setItem('authToken', response.credential);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setIsLoggedIn(true);
+    setUser(userData);
+    showNotification('Login successful with Google!', 'success');
+  };
+
+  // API request interceptor to add auth token
+  useEffect(() => {
+    const requestInterceptor = axios.interceptors.request.use(
+      (config: any) => {
+        const token = localStorage.getItem('authToken');
+        if (token && config.url?.startsWith(API_BASE_URL)) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error: any) => {
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.request.eject(requestInterceptor);
+    };
+  }, []);
+
+  // Fetch weather data based on location
+  useEffect(() => {
+    const fetchWeatherData = async () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              // Using OpenWeatherMap API - you'll need to sign up for an API key
+              const response = await axios.get(
+                `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=YOUR_API_KEY&units=metric`
+              );
+              
+              const data = response.data;
+              setWeatherData({
+                temperature: Math.round(data.main.temp),
+                humidity: data.main.humidity,
+                rainfall: data.rain ? data.rain['1h'] || 0 : 0
+              });
+            } catch (error) {
+              console.error('Error fetching weather data:', error);
+              // Fallback to default data
+              setWeatherData({
+                temperature: 32,
+                humidity: 78,
+                rainfall: 45
+              });
+            }
+          },
+          (error) => {
+            console.error('Geolocation error:', error);
+          }
+        );
+      }
+    };
+
+    fetchWeatherData();
+  }, []);
+
+  // Login function
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+        email: loginForm.email,
+        password: loginForm.password
+      });
+
+      const { token, user } = response.data;
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      setIsLoggedIn(true);
+      setUser(user);
+      setShowLogin(false);
+      showNotification('Login successful!', 'success');
+    } catch (error: any) {
+      showNotification(error.response?.data?.message || 'Login failed', 'error');
+    }
+  };
+
+  // Register function
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (registerForm.password !== registerForm.confirmPassword) {
+      showNotification('Passwords do not match', 'error');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+        name: registerForm.name,
+        email: registerForm.email,
+        password: registerForm.password,
+        role: 'farmer'
+      });
+
+      const { token, user } = response.data;
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      setIsLoggedIn(true);
+      setUser(user);
+      setShowRegister(false);
+      showNotification('Registration successful!', 'success');
+    } catch (error: any) {
+      showNotification(error.response?.data?.message || 'Registration failed', 'error');
+    }
+  };
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    setUser(null);
+    showNotification('Logged out successfully', 'success');
+  };
+
+  // Function to handle chatbot messages with FastAPI integration
+  const handleSendMessage = async () => {
     if (inputMessage.trim() === '') return;
 
     // Add user message
@@ -34,49 +289,204 @@ const App = () => {
     setMessages(newMessages);
     setInputMessage('');
 
-    // Generate bot response after a short delay
-    setTimeout(() => {
+    try {
+      // Send message to FastAPI chatbot backend
+      const response = await axios.post('http://localhost:8000/chat', {
+        message: inputMessage,
+        user_id: user?._id || 'anonymous'
+      });
+
+      const botResponse = response.data.response;
+      setMessages([...newMessages, { text: botResponse, sender: 'bot' }]);
+    } catch (error) {
+      // Fallback to local response if API fails
       const botResponse = generateBotResponse(inputMessage);
       setMessages([...newMessages, { text: botResponse, sender: 'bot' }]);
-    }, 1000);
+    }
   };
 
+  // Improved bot response with more agricultural knowledge
   const generateBotResponse = (userMessage: string) => {
     const lowerMessage = userMessage.toLowerCase();
 
     if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-      return "Hello! How can I assist you with your farming queries today?";
+      return "Hello! I'm your CropYield Assistant. How can I help you with your farming questions today?";
     } else if (lowerMessage.includes('yield') || lowerMessage.includes('prediction')) {
-      return "Our yield predictions use machine learning models trained on historical data, weather patterns, and soil conditions. You can get a prediction by filling out the form in the Prediction section.";
-    } else if (lowerMessage.includes('rice') || lowerMessage.includes('paddy')) {
-      return "For rice cultivation, we recommend maintaining proper water levels, using nitrogen-rich fertilizers, and monitoring for common pests like stem borers. The optimal temperature for rice is between 20-35°C.";
+      return "Our AI models analyze soil quality, weather patterns, and historical data to predict crop yields with 95% accuracy. You can get a personalized prediction by filling out the form in the Prediction section.";
+    } else if (lowerMessage.includes('rice')) {
+      return "For rice cultivation in Andhra Pradesh, I recommend: 1) Maintain 2-5cm water depth during vegetative stage, 2) Apply 80:40:40 kg/acre NPK, 3) Watch for stem borer and bacterial leaf blight. Optimal temperature: 20-35°C, rainfall: 1000-2000mm.";
+    } else if (lowerMessage.includes('chilli') || lowerMessage.includes('chillies')) {
+      return "For chillies: 1) Well-drained red loamy soil is best, 2) Space plants 45-60cm apart, 3) Use drip irrigation to conserve water, 4) Watch for thrips and fruit rot. Expected yield: 15-20 qtl/acre.";
     } else if (lowerMessage.includes('weather') || lowerMessage.includes('rain')) {
-      return "Our platform integrates real-time weather data to provide accurate predictions. You can check current weather conditions in the Features section.";
+      return `Current weather: Temperature ${weatherData.temperature}°C, Humidity ${weatherData.humidity}%, Rainfall ${weatherData.rainfall}mm. Our system integrates with meteorological services to give accurate forecasts.`;
     } else if (lowerMessage.includes('soil') || lowerMessage.includes('fertilizer')) {
-      return "Soil health is crucial for good yields. We recommend testing your soil every season and using fertilizers based on the nutrient deficiencies. Our platform can provide specific recommendations based on your soil type.";
+      return "Based on your location in Andhra Pradesh, I recommend soil testing every season. Coastal areas typically have alluvial soil (pH 6.5-7.5), while Rayalaseema has red soil (pH 6.0-7.0). I can help you interpret soil test results!";
     } else if (lowerMessage.includes('pest') || lowerMessage.includes('disease')) {
-      return "For pest control, we recommend integrated pest management approaches. Regular monitoring, biological controls, and targeted pesticide use can help manage pests effectively while minimizing environmental impact.";
+      return "For pest management: 1) Use integrated pest management (IPM) approaches, 2) Monitor fields weekly, 3) Use biological controls like neem oil, 4) Apply pesticides only when necessary. Tell me your specific pest issue for detailed advice.";
     } else if (lowerMessage.includes('thank')) {
-      return "You're welcome! Is there anything else you'd like to know?";
+      return "You're welcome! I'm here to help you maximize your farm's productivity. Is there anything else you'd like to know about crop management?";
+    } else if (lowerMessage.includes('price') || lowerMessage.includes('market')) {
+      return "I can provide current market prices for major crops in Andhra Pradesh mandis. Which crop are you interested in? Rice, chillies, turmeric, cotton, or pulses?";
+    } else if (lowerMessage.includes('irrigation') || lowerMessage.includes('water')) {
+      return "Water management tips: 1) Use drip/sprinkler irrigation to save 30-50% water, 2) Irrigate early morning or late evening to reduce evaporation, 3) Monitor soil moisture regularly, 4) Use mulch to conserve soil moisture.";
     } else {
-      return "I'm here to help with agricultural advice. You can ask me about crop yields, weather impacts, soil health, or pest management. How can I assist you?";
+      return "I'm here to help with agricultural advice. You can ask me about: crop yields, weather impacts, soil health, pest management, irrigation, fertilization, market prices, or government schemes. How can I assist you today?";
     }
   };
 
   // Function to show notification
   const showNotification = (message: string, type = 'info') => {
-    const toast = document.getElementById('notificationToast');
-    const toastMessage = document.getElementById('toastMessage');
+    // Create a toast notification if it doesn't exist
+    let toast = document.getElementById('notificationToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'notificationToast';
+      toast.className = `toast notification-toast ${type}`;
+      toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1050; display: none;';
+      
+      const toastMessage = document.createElement('div');
+      toastMessage.id = 'toastMessage';
+      toastMessage.className = 'toast-body';
+      toast.appendChild(toastMessage);
+      
+      document.body.appendChild(toast);
+    }
     
+    const toastMessage = document.getElementById('toastMessage');
     if (toast && toastMessage) {
       toastMessage.textContent = message;
       toast.style.display = 'block';
       
       // Hide after 5 seconds
       setTimeout(() => {
-        toast.style.display = 'none';
+        if (toast) {
+          toast.style.display = 'none';
+        }
       }, 5000);
     }
+  };
+
+  // Function to get soil data based on location
+  const getSoilData = async (latitude: number, longitude: number) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/soil-data`, {
+        params: { lat: latitude, lng: longitude }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching soil data:', error);
+      // Return default soil data based on region
+      return {
+        type: 'alluvial',
+        ph: 6.5,
+        nitrogen: 0.15,
+        phosphorus: 0.08,
+        potassium: 0.12,
+        organicMatter: 2.1
+      };
+    }
+  };
+
+  // Function to get weather data
+  const getWeatherDataAPI = async (latitude: number, longitude: number) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/weather/current`, {
+        params: { lat: latitude, lng: longitude }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      return null;
+    }
+  };
+
+  // Improved prediction function with real API call
+  const handlePrediction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const resultContainer = document.getElementById('resultContainer');
+    
+    if (loadingSpinner) loadingSpinner.style.display = 'block';
+    
+    try {
+      const formData = new FormData(form);
+      const predictionData: PredictionInput = {
+        cropType: formData.get('cropType') as string,
+        area: parseFloat(formData.get('area') as string),
+        rainfall: parseFloat(formData.get('rainfall') as string) || undefined,
+        temperature: parseFloat(formData.get('temperature') as string) || undefined,
+        humidity: parseFloat(formData.get('humidity') as string) || undefined,
+        soilType: formData.get('soilType') as string || undefined
+      };
+
+      // Add location data if available
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const { latitude, longitude } = position.coords;
+          predictionData.location = { latitude, longitude };
+          
+          // Get soil and weather data
+          const [soilData, weatherData] = await Promise.all([
+            getSoilData(latitude, longitude),
+            getWeatherDataAPI(latitude, longitude)
+          ]);
+
+          // Submit prediction
+          const response = await axios.post(`${API_BASE_URL}/predictions/predict`, predictionData);
+          displayPredictionResults(response.data, soilData, weatherData);
+        });
+      } else {
+        // Submit without location data
+        const response = await axios.post(`${API_BASE_URL}/predictions/predict`, predictionData);
+        displayPredictionResults(response.data);
+      }
+    } catch (error: any) {
+      console.error('Prediction error:', error);
+      showNotification(error.response?.data?.message || 'Prediction failed. Please try again.', 'error');
+      if (loadingSpinner) loadingSpinner.style.display = 'none';
+    }
+  };
+
+  // Display prediction results
+  const displayPredictionResults = (prediction: PredictionResult, soilData?: any, weatherData?: any) => {
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const resultContainer = document.getElementById('resultContainer');
+    
+    if (loadingSpinner) loadingSpinner.style.display = 'none';
+    if (resultContainer) resultContainer.style.display = 'block';
+    
+    // Update UI with prediction results
+    const yieldElement = document.getElementById('yieldValue');
+    const yieldPerAcreElement = document.getElementById('yieldPerAcre');
+    const confidenceElement = document.getElementById('confidenceBadge');
+    const irrigationElement = document.getElementById('irrigationRecommendation');
+    const fertilizerElement = document.getElementById('fertilizerRecommendation');
+    const pestElement = document.getElementById('pestRecommendation');
+    const harvestElement = document.getElementById('harvestRecommendation');
+    
+    if (yieldElement) yieldElement.textContent = `${prediction.yield} kg`;
+    if (yieldPerAcreElement) yieldPerAcreElement.textContent = `Per acre: ${prediction.perAcre} kg`;
+    if (confidenceElement) confidenceElement.textContent = `Confidence: ${prediction.confidence}%`;
+    
+    // Update recommendations
+    if (irrigationElement) irrigationElement.textContent = prediction.recommendations.irrigation;
+    if (fertilizerElement) fertilizerElement.textContent = prediction.recommendations.fertilization;
+    if (pestElement) pestElement.textContent = prediction.recommendations.pestControl;
+    if (harvestElement) harvestElement.textContent = prediction.recommendations.harvestTiming;
+
+    // Update weather and soil info if available
+    if (weatherData) {
+      const tempElement = document.getElementById('weather-temp');
+      const humidityElement = document.getElementById('weather-humidity');
+      const rainfallElement = document.getElementById('weather-rainfall');
+      
+      if (tempElement) tempElement.textContent = `${weatherData.temperature}°C`;
+      if (humidityElement) humidityElement.textContent = `${weatherData.humidity}%`;
+      if (rainfallElement) rainfallElement.textContent = `${weatherData.rainfall}mm`;
+    }
+
+    showNotification('Yield prediction completed successfully!', 'success');
   };
 
   // Function to reset form
@@ -221,61 +631,30 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // Initialize weather data
-    setTimeout(() => {
-      const tempElement = document.getElementById('weather-temp');
-      const humidityElement = document.getElementById('weather-humidity');
-      const rainfallElement = document.getElementById('weather-rainfall');
-      
-      if (tempElement) tempElement.textContent = '32°C';
-      if (humidityElement) humidityElement.textContent = '78%';
-      if (rainfallElement) rainfallElement.textContent = '45mm';
-    }, 1000);
+  // Initialize weather data display
+  const tempElement = document.getElementById('weather-temp');
+  const humidityElement = document.getElementById('weather-humidity');
+  const rainfallElement = document.getElementById('weather-rainfall');
+  
+  if (tempElement) tempElement.textContent = `${weatherData.temperature}°C`;
+  if (humidityElement) humidityElement.textContent = `${weatherData.humidity}%`;
+  if (rainfallElement) rainfallElement.textContent = `${weatherData.rainfall}mm`;
 
-    // Initialize form submission
-    const form = document.getElementById('yieldPredictionForm');
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const resultContainer = document.getElementById('resultContainer');
-        
-        if (loadingSpinner) loadingSpinner.style.display = 'block';
-        
-        // Simulate prediction process
-        setTimeout(() => {
-          if (loadingSpinner) loadingSpinner.style.display = 'none';
-          if (resultContainer) resultContainer.style.display = 'block';
-          
-          // Generate random yield value
-          const yieldValue = Math.floor(Math.random() * 2000) + 1000;
-          const yieldElement = document.getElementById('yieldValue');
-          const yieldPerAcreElement = document.getElementById('yieldPerAcre');
-          
-          if (yieldElement) yieldElement.textContent = yieldValue + ' kg';
-          if (yieldPerAcreElement) yieldPerAcreElement.textContent = 'Per acre: ' + Math.floor(yieldValue / 2) + ' kg';
-          
-          // Generate recommendations
-          const cropTypeSelect = document.getElementById('cropType') as HTMLSelectElement;
-          const cropType = cropTypeSelect ? cropTypeSelect.value : 'crop';
-          
-          const irrigationElement = document.getElementById('irrigationRecommendation');
-          const fertilizerElement = document.getElementById('fertilizerRecommendation');
-          const pestElement = document.getElementById('pestRecommendation');
-          const harvestElement = document.getElementById('harvestRecommendation');
-          
-          if (irrigationElement) irrigationElement.textContent = 
-            `For ${cropType}, we recommend irrigation every 3 days during dry seasons.`;
-          if (fertilizerElement) fertilizerElement.textContent = 
-            `Use nitrogen-rich fertilizer for ${cropType} during the growth phase.`;
-          if (pestElement) pestElement.textContent = 
-            `Monitor for common pests in ${cropType} and use organic pesticides when detected.`;
-          if (harvestElement) harvestElement.textContent = 
-            `Optimal harvest time for ${cropType} is typically 90-120 days after planting.`;
-        }, 3000);
-      });
-    }
-  }, []);
+  // Get the form element and add React event handler
+  const form = document.getElementById('yieldPredictionForm') as HTMLFormElement;
+  if (form) {
+    // Remove any existing event listeners to avoid duplicates
+    const newForm = form.cloneNode(true) as HTMLFormElement;
+    form.parentNode?.replaceChild(newForm, form);
+    
+    // Add the submit handler directly to the form
+    newForm.onsubmit = (e: Event) => {
+      e.preventDefault();
+      handlePrediction(e as unknown as React.FormEvent);
+      return false;
+    };
+  }
+}, [weatherData]);
 
   return (
     <div>
@@ -326,18 +705,7 @@ const App = () => {
             padding: 120px 0;
             text-align: center;
             overflow: hidden;
-        }
-
-        #hero-video {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            min-width: 100%;
-            min-height: 100%;
-            width: auto;
-            height: auto;
-            z-index: -1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
         }
 
         .hero-section::before {
@@ -531,6 +899,7 @@ const App = () => {
         .crop-image {
             height: 200px;
             object-fit: cover;
+            width: 100%;
         }
 
         .chatbot-container {
@@ -803,8 +1172,122 @@ const App = () => {
         body {
             top: auto !important;
         }
-      `}} />
 
+        .google-login-btn {
+            margin-top: 15px;
+        }
+      `}} />
+      
+      {/* Notification Toast */}
+      <div id="notificationToast" className="notification-toast" style={{display: 'none'}}>
+        <div id="toastMessage"></div>
+      </div>
+
+      {/* Add login/register modals */}
+      {showLogin && (
+        <div className="modal show d-block" tabIndex={-1}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Login</h5>
+                <button type="button" className="btn-close" onClick={() => setShowLogin(false)}></button>
+              </div>
+              <div className="modal-body">
+                <form onSubmit={handleLogin}>
+                  <div className="mb-3">
+                    <label className="form-label">Email</label>
+                    <input
+                      type="email"
+                      className="form-control"
+                      value={loginForm.email}
+                      onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary w-100">Login</button>
+                </form>
+                <div className="text-center mt-3">
+                  <div ref={googleButtonRef} className="google-login-btn"></div>
+                  <p className="mt-3">Don't have an account? <a href="#" onClick={() => { setShowLogin(false); setShowRegister(true); }}>Register</a></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRegister && (
+        <div className="modal show d-block" tabIndex={-1}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Register</h5>
+                <button type="button" className="btn-close" onClick={() => setShowRegister(false)}></button>
+              </div>
+              <div className="modal-body">
+                <form onSubmit={handleRegister}>
+                  <div className="mb-3">
+                    <label className="form-label">Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={registerForm.name}
+                      onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Email</label>
+                    <input
+                      type="email"
+                      className="form-control"
+                      value={registerForm.email}
+                      onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      value={registerForm.password}
+                      onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Confirm Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      value={registerForm.confirmPassword}
+                      onChange={(e) => setRegisterForm({...registerForm, confirmPassword: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary w-100">Register</button>
+                </form>
+                <div className="text-center mt-3">
+                  <p>Already have an account? <a href="#" onClick={() => { setShowRegister(false); setShowLogin(true); }}>Login</a></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark sticky-top">
         <div className="container">
           <a className="navbar-brand" href="#">
@@ -831,15 +1314,33 @@ const App = () => {
                 <a className="nav-link" href="#about">About</a>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="#contact">Contact</a>
+                {isLoggedIn ? (
+                  <div className="dropdown">
+                    <button className="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                      <i className="fas fa-user me-2"></i>
+                      {user?.name}
+                    </button>
+                    <ul className="dropdown-menu">
+                      <li><a className="dropdown-item" href="#">Profile</a></li>
+                      <li><a className="dropdown-item" href="#">My Predictions</a></li>
+                      <li><hr className="dropdown-divider" /></li>
+                      <li><button className="dropdown-item" onClick={handleLogout}>Logout</button></li>
+                    </ul>
+                  </div>
+                ) : (
+                  <button className="btn btn-outline-light" onClick={() => setShowLogin(true)}>
+                    <i className="fas fa-sign-in-alt me-2"></i>Login
+                  </button>
+                )}
               </li>
-              <li className="nav-item">
+              <li className="nav-item ms-2">
                 <div className="language-selector">
+                  <i className="fas fa-globe me-2"></i>
                   <select 
-                    id="language" 
-                    onChange={(e) => applyTranslation(e.target.value)}
-                    value={currentLanguage}
                     ref={languageSelectRef}
+                    value={currentLanguage}
+                    onChange={(e) => applyTranslation(e.target.value)}
+                    className="form-select"
                   >
                     <option value="en">English</option>
                     <option value="te">Telugu</option>
@@ -849,32 +1350,27 @@ const App = () => {
                     <option value="ml">Malayalam</option>
                   </select>
                 </div>
-                <div id="google_translate_element" />
               </li>
             </ul>
           </div>
         </div>
       </nav>
 
+      {/* Hero Section */}
       <section id="home" className="hero-section">
-        <video autoPlay loop muted playsInline id="hero-video">
-          <source src="AI_Powered_Agricultural_Video_Generation.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
         <div className="container">
-          <div className="row">
-            <div className="col-lg-8 mx-auto">
+          <div className="row justify-content-center">
+            <div className="col-lg-8 text-center">
               <h1 className="display-4 fw-bold mb-4">AI-Powered Crop Yield Prediction</h1>
-              <p className="lead mb-4">Maximize your agricultural productivity with our AI-driven platform that
-                provides accurate yield predictions and actionable recommendations tailored to your crops and
-                regional conditions in Andhra Pradesh.</p>
-              <a href="#prediction" className="btn btn-lg btn-primary me-2">Get Prediction</a>
-              <a href="#features" className="btn btn-lg btn-outline-light">Learn More</a>
+              <p className="lead mb-5">Maximize your harvest with our advanced machine learning models that predict crop yields with 95% accuracy</p>
+              <a href="#prediction" className="btn btn-primary btn-lg me-3">Get Prediction</a>
+              <a href="#features" className="btn btn-outline-light btn-lg">Learn More</a>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Stats Section */}
       <section className="py-5 bg-light">
         <div className="container">
           <div className="row text-center">
@@ -897,83 +1393,48 @@ const App = () => {
           </div>
         </div>
       </section>
-        <section id="features" className="py-5">
+
+      {/* Features Section */}
+      <section id="features" className="py-5">
         <div className="container">
-          <h2 className="text-center section-title">How Our Platform Helps Farmers</h2>
+          <h2 className="section-title text-center">How It Works</h2>
           <div className="row">
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
-                <div className="card-body text-center p-4">
-                  <div className="feature-icon">
-                    <i className="fas fa-brain" />
-                  </div>
-                  <h3 className="h4">Machine Learning Models</h3>
-                  <p className="card-text">Our AI models analyze historical data, weather patterns, and soil
-                    conditions to predict yields with 95% accuracy.</p>
-                </div>
-              </div>
-            </div>
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
+            <div className="col-md-4 mb-4">
+              <div className="feature-card card h-100">
                 <div className="card-body text-center p-4">
                   <div className="feature-icon">
                     <i className="fas fa-cloud-sun" />
                   </div>
                   <h3 className="h4">Weather Analysis</h3>
-                  <p className="card-text">Real-time weather data integration for accurate predictions and
-                    recommendations based on current and forecasted conditions.</p>
+                  <p>Our system analyzes real-time weather data including temperature, rainfall, and humidity to predict optimal growing conditions.</p>
                 </div>
               </div>
             </div>
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
+            <div className="col-md-4 mb-4">
+              <div className="feature-card card h-100">
                 <div className="card-body text-center p-4">
                   <div className="feature-icon">
-                    <i className="fas fa-vial" />
+                    <i className="fas fa-seedling" />
                   </div>
-                  <h3 className="h4">Soil Health Monitoring</h3>
-                  <p className="card-text">Comprehensive soil health metrics analysis to provide tailored
-                    fertilization and irrigation recommendations.</p>
+                  <h3 className="h4">Soil Health</h3>
+                  <p>We evaluate soil quality parameters including pH levels, nitrogen content, and soil type to recommend the best crops for your land.</p>
                 </div>
               </div>
             </div>
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
+            <div className="col-md-4 mb-4">
+              <div className="feature-card card h-100">
                 <div className="card-body text-center p-4">
                   <div className="feature-icon">
-                    <i className="fas fa-chart-line" />
+                    <i className="fas fa-brain" />
                   </div>
-                  <h3 className="h4">Yield Prediction</h3>
-                  <p className="card-text">Advanced AI algorithms predict crop yields with high accuracy based on
-                    historical data and current conditions.</p>
-                </div>
-              </div>
-            </div>
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
-                <div className="card-body text-center p-4">
-                  <div className="feature-icon">
-                    <i className="fas fa-tint" />
-                  </div>
-                  <h3 className="h4">Irrigation Optimization</h3>
-                  <p className="card-text">Smart irrigation recommendations to conserve water while maximizing
-                    crop growth and health.</p>
-                </div>
-              </div>
-            </div>
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="card feature-card h-100">
-                <div className="card-body text-center p-4">
-                  <div className="feature-icon">
-                    <i className="fas fa-spray-can" />
-                  </div>
-                  <h3 className="h4">Pest Control</h3>
-                  <p className="card-text">Early detection and management strategies for pests and diseases
-                    specific to your crops and region.</p>
+                  <h3 className="h4">AI Prediction</h3>
+                  <p>Our machine learning models process historical data and current conditions to provide accurate yield predictions with confidence scores.</p>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Real-time Data Section */}
           <div className="mt-5">
             <h3 className="text-center mb-4">Real-time Agricultural Data</h3>
             <div className="row">
@@ -984,9 +1445,9 @@ const App = () => {
                     <h4>Weather Conditions</h4>
                     <p>Live weather data from across Andhra Pradesh</p>
                     <div className="mt-3">
-                      <span className="badge bg-info" id="weather-temp">Loading...</span>
-                      <span className="badge bg-primary" id="weather-humidity">Loading...</span>
-                      <span className="badge bg-success" id="weather-rainfall">Loading...</span>
+                      <span className="badge bg-info" id="weather-temp">{weatherData.temperature}°C</span>
+                      <span className="badge bg-primary" id="weather-humidity">{weatherData.humidity}%</span>
+                      <span className="badge bg-success" id="weather-rainfall">{weatherData.rainfall}mm</span>
                     </div>
                   </div>
                 </div>
@@ -998,7 +1459,7 @@ const App = () => {
                     <h4>Crop Health Index</h4>
                     <p>Current crop health metrics</p>
                     <div className="progress mt-3" style={{height: '20px'}}>
-                      <div className="progress-bar bg-success" role="progressbar" id="crop-health-bar" style={{width: '78%'}} aria-valuenow={78} aria-valuemin={0} aria-valuemax={100}>78%
+                      <div className="progress-bar bg-success" role="progressbar" style={{width: '78%'}} aria-valuenow={78} aria-valuemin={0} aria-valuemax={100}>78%
                       </div>
                     </div>
                   </div>
@@ -1011,7 +1472,7 @@ const App = () => {
                     <h4>Soil Moisture Levels</h4>
                     <p>Regional soil moisture data</p>
                     <div className="progress mt-3" style={{height: '20px'}}>
-                      <div className="progress-bar bg-info" role="progressbar" id="soil-moisture-bar" style={{width: '65%'}} aria-valuenow={65} aria-valuemin={0} aria-valuemax={100}>65%
+                      <div className="progress-bar bg-info" role="progressbar" style={{width: '65%'}} aria-valuenow={65} aria-valuemin={0} aria-valuemax={100}>65%
                       </div>
                     </div>
                   </div>
@@ -1022,540 +1483,320 @@ const App = () => {
         </div>
       </section>
 
+      {/* Prediction Section */}
       <section id="prediction" className="py-5 bg-light">
         <div className="container">
-          <h2 className="text-center section-title">Crop Yield Prediction</h2>
+          <h2 className="section-title text-center">Crop Yield Prediction</h2>
           <div className="row justify-content-center">
-            <div className="col-lg-10">
-              <div className="prediction-form">
-                <form id="yieldPredictionForm">
-                  <div className="row mb-4">
-                    <div className="col-md-6 mb-3">
-                      <label htmlFor="cropType" className="form-label">Crop Type</label>
-                      <select className="form-select" id="cropType" required>
-                        <option value="" disabled>Select crop type</option>
-                        <option value="rice">Rice</option>
-                        <option value="wheat">Wheat</option>
-                        <option value="corn">Corn</option>
-                        <option value="sugarcane">Sugarcane</option>
-                        <option value="cotton">Cotton</option>
-                        <option value="pulses">Pulses</option>
-                        <option value="chillies">Chillies</option>
-                        <option value="turmeric">Turmeric</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label htmlFor="region" className="form-label">Region</label>
-                      <select className="form-select" id="region" required>
-                        <option value="" disabled>Select your region</option>
-                        <option value="coastal">Coastal Andhra</option>
-                        <option value="rayalaseema">Rayalaseema</option>
-                        <option value="northern">Northern Andhra</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="row mb-4">
-                    <div className="col-md-6 mb-3">
-                      <label htmlFor="soilType" className="form-label">Soil Type</label>
-                      <select className="form-select" id="soilType" required>
-                        <option value="" disabled>Select soil type</option>
-                        <option value="alluvial">Alluvial</option>
-                        <option value="black">Black</option>
-                        <option value="red">Red</option>
-                        <option value="laterite">Laterite</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label htmlFor="area" className="form-label">Area (acres)</label>
-                      <input type="number" className="form-control" id="area" placeholder="Enter land area" min={1} required />
-                    </div>
-                  </div>
-                  <div className="row mb-4">
-                    <div className="col-md-4 mb-3">
-                      <label htmlFor="rainfall" className="form-label">Rainfall (mm)</label>
-                      <input type="number" className="form-control" id="rainfall" placeholder="Enter expected rainfall" min={0} required />
-                    </div>
-                    <div className="col-md-4 mb-3">
-                      <label htmlFor="temperature" className="form-label">Avg. Temperature (°C)</label>
-                      <input type="number" className="form-control" id="temperature" placeholder="Enter temperature" required />
-                    </div>
-                    <div className="col-md-4 mb-3">
-                      <label htmlFor="humidity" className="form-label">Avg. Humidity (%)</label>
-                      <input type="number" className="form-control" id="humidity" placeholder="Enter humidity" min={0} max={100} required />
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <button type="submit" className="btn btn-primary btn-lg">
-                      <i className="fas fa-calculator me-2" />Predict Yield
-                    </button>
-                  </div>
-                </form>
-              </div>
-              <div className="loading-spinner" id="loadingSpinner" style={{display: 'none'}}>
-                <div className="spinner-border text-primary" role="status" style={{width: '3rem', height: '3rem'}}>
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                <p className="mt-3">Running ML prediction models...</p>
-                <div className="progress training-progress w-50 mx-auto">
-                  <div className="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style={{width: '0%'}} />
-                </div>
-              </div>
-              <div className="result-container" id="resultContainer" style={{display: 'none'}}>
-                <div className="text-center mb-4">
-                  <h3>Yield Prediction Results</h3>
-                  <div className="yield-value" id="yieldValue">0 kg</div>
-                  <p className="text-muted" id="yieldPerAcre">Per acre: 0 kg</p>
-                  <span className="confidence-badge" id="confidenceBadge">
-                    <i className="fas fa-brain me-1" /> Confidence: 92%
-                  </span>
-                  <p className="prediction-interval mt-2" id="predictionInterval">Prediction interval: 0 - 0 kg
-                  </p>
-                </div>
-                <div className="chart-container">
-                  <canvas id="yieldChart" />
-                </div>
-                <div className="model-info">
-                  <h5><i className="fas fa-info-circle me-2" />Model Insights:</h5>
-                  <p id="modelInsights">Our Random Forest model analyzed 15 factors including weather
-                    patterns, soil composition, and historical data to generate this prediction.</p>
-                  <div className="mt-3">
-                    <h6>Key Factors Influencing This Prediction:</h6>
-                    <div className="mt-2" id="factorBars">
-                    </div>
-                  </div>
-                </div>
-                <div className="row mt-4">
+            <div className="col-lg-8">
+              <form id="yieldPredictionForm" onSubmit={handlePrediction} className="prediction-form">
+                <div className="row">
                   <div className="col-md-6 mb-3">
-                    <div className="card h-100 recommendation-card">
-                      <div className="card-body">
-                        <h5 className="card-title"><i className="fas fa-tint me-2" />Irrigation Recommendation
-                        </h5>
-                        <p className="card-text" id="irrigationRecommendation">Recommendation will appear
-                          here</p>
-                      </div>
-                    </div>
+                    <label htmlFor="cropType" className="form-label">Crop Type</label>
+                    <select className="form-select" id="cropType" name="cropType" required>
+                      <option value="">Select Crop</option>
+                      <option value="rice">Rice</option>
+                      <option value="wheat">Wheat</option>
+                      <option value="corn">Corn</option>
+                      <option value="sugarcane">Sugarcane</option>
+                      <option value="cotton">Cotton</option>
+                      <option value="chillies">Chillies</option>
+                    </select>
                   </div>
                   <div className="col-md-6 mb-3">
-                    <div className="card h-100 recommendation-card">
-                      <div className="card-body">
-                        <h5 className="card-title"><i className="fas fa-seedling me-2" />Fertilization
-                          Recommendation</h5>
-                        <p className="card-text" id="fertilizerRecommendation">Recommendation will appear
-                          here</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <div className="card h-100 recommendation-card">
-                      <div className="card-body">
-                        <h5 className="card-title"><i className="fas fa-bug me-2" />Pest Control
-                          Recommendation</h5>
-                        <p className="card-text" id="pestRecommendation">Recommendation will appear here</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <div className="card h-100 recommendation-card">
-                      <div className="card-body">
-                        <h5 className="card-title"><i className="fas fa-calendar-alt me-2" />Harvest Timing
-                        </h5>
-                        <p className="card-text" id="harvestRecommendation">Recommendation will appear here
-                        </p>
-                      </div>
-                    </div>
+                    <label htmlFor="area" className="form-label">Area (acres)</label>
+                    <input type="number" className="form-control" id="area" name="area" min="1" required />
                   </div>
                 </div>
-                <div className="text-center mt-4">
-                  <button className="btn btn-outline-primary" onClick={resetForm}>
-                    <i className="fas fa-redo me-2" />Make Another Prediction
+                
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="soilType" className="form-label">Soil Type</label>
+                    <select className="form-select" id="soilType" name="soilType">
+                      <option value="">Select Soil Type</option>
+                      <option value="alluvial">Alluvial</option>
+                      <option value="black">Black</option>
+                      <option value="red">Red</option>
+                      <option value="laterite">Laterite</option>
+                      <option value="mountain">Mountain</option>
+                      <option value="desert">Desert</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="rainfall" className="form-label">Rainfall (mm)</label>
+                    <input type="number" className="form-control" id="rainfall" name="rainfall" step="0.1" value={weatherData.rainfall} readOnly />
+                  </div>
+                </div>
+                
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="temperature" className="form-label">Temperature (°C)</label>
+                    <input type="number" className="form-control" id="temperature" name="temperature" step="0.1" value={weatherData.temperature} readOnly />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="humidity" className="form-label">Humidity (%)</label>
+                    <input type="number" className="form-control" id="humidity" name="humidity" step="0.1" value={weatherData.humidity} readOnly />
+                  </div>
+                </div>
+                
+                <div className="d-grid gap-2 d-md-flex justify-content-md-center mt-4">
+                  <button type="submit" className="btn btn-primary me-md-2">
+                    <i className="fas fa-calculator me-2"></i>Predict Yield
+                  </button>
+                  <button type="button" className="btn btn-outline-secondary" onClick={resetForm}>
+                    <i className="fas fa-redo me-2"></i>Reset
                   </button>
                 </div>
-              </div>
-            </div>
-            </div>
-        </div>
-      </section>
-
-      <section className="py-5">
-        <div className="container">
-          <h2 className="text-center section-title">Regional Yield Potential</h2>
-          <p className="text-center mb-4">Explore the agricultural potential across different regions of Andhra Pradesh</p>
-          <div className="interactive-map">
-            <div className="text-center p-4">
-              <i className="fas fa-map-marked-alt fa-5x text-primary mb-3" />
-              <h3>Interactive Agricultural Map</h3>
-              <p className="text-muted">Visualize soil quality, water availability, and crop suitability across
-                regions</p>
-              <button className="btn btn-primary mt-3" onClick={() => showNotification('Map feature coming soon!', 'info')}>
-                <i className="fas fa-map me-2" />Explore Map
-              </button>
-            </div>
-          </div>
-          <div className="row mt-4">
-            <div className="col-md-6">
-              <div className="card h-100">
-                <div className="card-body">
-                  <h4 className="card-title">Regional Analysis</h4>
-                  <p>Compare different regions based on agricultural productivity potential:</p>
-                  <div className="mt-3">
-                    <div className="d-flex justify-content-between mb-2">
-                      <span>Coastal Andhra</span>
-                      <span className="badge bg-success">High Potential</span>
+                
+                <div id="loadingSpinner" className="loading-spinner" style={{display: 'none'}}>
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                  <p className="mt-2">Analyzing data and predicting yield...</p>
+                </div>
+              </form>
+              
+              <div id="resultContainer" className="result-container" style={{display: 'none'}}>
+                <div className="text-center mb-4">
+                  <h3>Prediction Results</h3>
+                  <div className="yield-value" id="yieldValue">0 kg</div>
+                  <div className="text-muted mb-3" id="yieldPerAcre">Per acre: 0 kg</div>
+                  <span className="confidence-badge" id="confidenceBadge">Confidence: 95%</span>
+                </div>
+                
+                <div className="row mt-4">
+                  <div className="col-md-6">
+                    <h4>Weather Conditions</h4>
+                    <ul className="list-group">
+                      <li className="list-group-item d-flex justify-content-between align-items-center">
+                        Temperature
+                        <span id="weather-temp-result">{weatherData.temperature}°C</span>
+                      </li>
+                      <li className="list-group-item d-flex justify-content-between align-items-center">
+                        Humidity
+                        <span id="weather-humidity-result">{weatherData.humidity}%</span>
+                      </li>
+                      <li className="list-group-item d-flex justify-content-between align-items-center">
+                        Rainfall
+                        <span id="weather-rainfall-result">{weatherData.rainfall}mm</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="col-md-6">
+                    <h4>Recommendations</h4>
+                    <div className="card recommendation-card mb-3">
+                      <div className="card-body">
+                        <h5 className="card-title">Irrigation</h5>
+                        <p className="card-text" id="irrigationRecommendation">Based on your soil and crop type</p>
+                      </div>
                     </div>
-                    <div className="d-flex justify-content-between mb-2">
-                      <span>Rayalaseema</span>
-                      <span className="badge bg-warning">Medium Potential</span>
+                    <div className="card recommendation-card mb-3">
+                      <div className="card-body">
+                        <h5 className="card-title">Fertilization</h5>
+                        <p className="card-text" id="fertilizerRecommendation">Based on your soil and crop type</p>
+                      </div>
                     </div>
-                    <div className="d-flex justify-content-between mb-2">
-                      <span>Northern Andhra</span>
-                      <span className="badge bg-success">High Potential</span>
+                    <div className="card recommendation-card mb-3">
+                      <div className="card-body">
+                        <h5 className="card-title">Pest Control</h5>
+                        <p className="card-text" id="pestRecommendation">Based on your soil and crop type</p>
+                      </div>
+                    </div>
+                    <div className="card recommendation-card">
+                      <div className="card-body">
+                        <h5 className="card-title">Harvest Timing</h5>
+                        <p className="card-text" id="harvestRecommendation">Based on your soil and crop type</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            <div className="col-md-6">
-              <div className="card h-100">
-                <div className="card-body">
-                  <h4 className="card-title">Soil Quality Index</h4>
-                  <p>Current soil quality metrics across regions:</p>
-                  <div className="mt-3">
-                    <div className="mb-2">
-                      <div className="d-flex justify-content-between">
-                        <span>Alluvial Soil</span>
-                        <span>92%</span>
-                      </div>
-                      <div className="progress" style={{height: '10px'}}>
-                        <div className="progress-bar bg-success" role="progressbar" style={{width: '92%'}}>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mb-2">
-                      <div className="d-flex justify-content-between">
-                        <span>Black Soil</span>
-                        <span>85%</span>
-                      </div>
-                      <div className="progress" style={{height: '10px'}}>
-                        <div className="progress-bar bg-primary" role="progressbar" style={{width: '85%'}}>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mb-2">
-                      <div className="d-flex justify-content-between">
-                        <span>Red Soil</span>
-                        <span>78%</span>
-                      </div>
-                      <div className="progress" style={{height: '10px'}}>
-                        <div className="progress-bar bg-warning" role="progressbar" style={{width: '78%'}}>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="d-flex justify-content-between">
-                        <span>Laterite Soil</span>
-                        <span>65%</span>
-                      </div>
-                      <div className="progress" style={{height: '10px'}}>
-                        <div className="progress-bar bg-info" role="progressbar" style={{width: '65%'}} />
-                      </div>
-                    </div>
-                  </div>
+                
+                <div className="model-info mt-4">
+                  <h5>About Our Prediction Model</h5>
+                  <p>Our AI model analyzes historical yield data, weather patterns, soil conditions, and satellite imagery to provide accurate predictions with 95% confidence based on similar conditions in your region.</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
-      {/* Rest of the component remains the same as in the previous version */}
-      {/* Only the parts with issues are fixed below */}
 
-      <section id="crops" className="py-5 bg-light">
+      {/* Crops Section */}
+      <section id="crops" className="py-5">
         <div className="container">
-          <h2 className="text-center section-title">Supported Crops</h2>
+          <h2 className="section-title text-center">Major Crops in Andhra Pradesh</h2>
           <div className="row">
-           <div className="col-md-4 mb-4">
+            <div className="col-md-4 mb-4">
               <div className="crop-card card h-100">
-                <img src="https://www.nextechagrisolutions.com/blog/wp-content/uploads/2014/11/Rice-Parts.jpg" className="card-img-top crop-image" alt="Rice" />
+                <img src="https://images.unsplash.com/photo-1563227815-4dd1652edb0c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cmljZSUyMGZpZWxkJTIwaW5kaWF8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=500&q=60" className="crop-image card-img-top" alt="Rice" />
                 <div className="card-body">
                   <h3 className="h5">Rice</h3>
-                  <p className="card-text">Get optimized irrigation and fertilization plans for higher rice yields
-                    with our AI-powered platform.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-success">Neural Network</span>
+                  <p className="card-text">Andhra Pradesh is a major producer of rice, with optimal growing conditions in the coastal regions.</p>
+                  <div className="d-flex justify-content-between">
+                    <small className="text-muted">Season: Kharif & Rabi</small>
+                    <small className="text-muted">Yield: 2500-3000 kg/acre</small>
                   </div>
                 </div>
               </div>
             </div>
             <div className="col-md-4 mb-4">
               <div className="crop-card card h-100">
-                <img src="https://www.farmatma.in/wp-content/uploads/2019/05/wheat-cultivation-india.jpg" className="card-img-top crop-image" alt="Wheat" />
-                <div className="card-body">
-                  <h3 className="h5">Wheat</h3>
-                  <p className="card-text">Maximize your wheat production with precise predictions and tailored
-                    recommendations.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-info">Gradient Boosting</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="crop-card card h-100">
-                <img src="https://cdn.britannica.com/36/167236-050-BF90337E/Ears-corn.jpg" className="card-img-top crop-image" alt="Corn" />
-                <div className="card-body">
-                  <h3 className="h5">Corn</h3>
-                  <p className="card-text">Optimize your corn cultivation with data-driven insights on irrigation
-                    and fertilization.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-warning">XGBoost</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="crop-card card h-100">
-                <img src="https://a-z-animals.com/media/2022/07/shutterstock_767632852.jpg" className="card-img-top crop-image" alt="Sugarcane" />
-                <div className="card-body">
-                  <h3 className="h5">Sugarcane</h3>
-                  <p className="card-text">Increase your sugarcane yield with precision farming recommendations.
-                  </p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-success">Neural Network</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="crop-card card h-100">
-                <img src="https://wallpapercave.com/wp/wp8255679.jpg" className="card-img-top crop-image" alt="Chillies" />
+                <img src="https://images.unsplash.com/photo-1612333973670-7402fd5d0a5c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Y2hpbGxpZXMlMjBjcm9wfGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=60" className="crop-image card-img-top" alt="Chillies" />
                 <div className="card-body">
                   <h3 className="h5">Chillies</h3>
-                  <p className="card-text">Optimize chilli cultivation with our specialized prediction models.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-info">Gradient Boosting</span>
+                  <p className="card-text">Known for the famous Guntur chillies, Andhra Pradesh is India's largest producer and exporter of red chillies.</p>
+                  <div className="d-flex justify-content-between">
+                    <small className="text-muted">Season: Kharif</small>
+                    <small className="text-muted">Yield: 15-20 qtl/acre</small>
                   </div>
                 </div>
               </div>
             </div>
             <div className="col-md-4 mb-4">
               <div className="crop-card card h-100">
-                <img src="https://www.healthifyme.com/blog/wp-content/uploads/2022/01/Turmeric-1-1024x683.jpg" className="card-img-top crop-image" alt="Turmeric" onError={(e) => {
-                  e.currentTarget.src = 'https://images.unsplash.com/photo-1611088139556-5d1c4a2b5c0f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8dHVybWVyaWN8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=500&q=60';
-                }} />
+                <img src="https://images.unsplash.com/photo-1611088139556-5d1c4a2b5c0f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8dHVybWVyaWN8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=500&q=60" className="crop-image card-img-top" alt="Turmeric" />
                 <div className="card-body">
                   <h3 className="h5">Turmeric</h3>
-                  <p className="card-text">Maximize your turmeric yield with tailored irrigation and pest control
-                    plans.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-primary">Random Forest</span>
-                    <span className="badge bg-warning">XGBoost</span>
+                  <p className="card-text">Andhra Pradesh produces high-quality turmeric with excellent medicinal properties.</p>
+                  <div className="d-flex justify-content-between">
+                    <small className="text-muted">Season: Throughout year</small>
+                    <small className="text-muted">Yield: 40-50 tons/acre</small>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </section>
 
-           
-      <section id="about" className="py-5">
+      {/* About Section */}
+      <section id="about" className="py-5 bg-light">
         <div className="container">
-          <h2 className="text-center section-title">About CropYield Pro</h2>
-          <div className="row">
+          <h2 className="section-title text-center">About CropYield Pro</h2>
+          <div className="row align-items-center">
             <div className="col-lg-6">
-              <h3>Our Mission</h3>
-              <p>CropYield Pro was founded with a simple mission: to empower farmers with AI-driven insights that
-                maximize crop yields while minimizing environmental impact. We combine cutting-edge machine
-                learning with agricultural expertise to deliver
-                accurate predictions and actionable recommendations.</p>
-              <p>Our platform is designed specifically for the diverse agricultural landscape of Andhra Pradesh, taking
-                into account regional variations in soil, climate, and farming practices.</p>
-              <h3 className="mt-4">Our Technology</h3>
-              <p>We utilize multiple machine learning models including Random Forest, Neural Networks, and
-                Gradient Boosting algorithms trained on thousands of data points from farms across Andhra Pradesh. Our
-                models continuously learn and improve as more
-                data becomes available.</p>
-            </div>
-            <div className="col-lg-6">
-              <div className="card">
-                <div className="card-body">
-                  <h4>Why Choose CropYield Pro?</h4>
-                  <ul className="list-group list-group-flush">
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" />
-                      Accurate predictions with 95%+ accuracy</li>
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" />
-                      Tailored to Andhra Pradesh's agricultural conditions</li>
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" />
-                      Multi-language support for local farmers</li>
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" />
-                      Real-time weather and soil data integration</li>
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" />
-                      Actionable recommendations for improved yield</li>
-                    <li className="list-group-item"><i className="fas fa-check-circle text-success me-2" /> Free
-                      basic service with premium options</li>
-                  </ul>
+              <h3>Revolutionizing Agriculture with AI</h3>
+              <p>CropYield Pro leverages cutting-edge machine learning algorithms to help farmers in Andhra Pradesh maximize their crop yields and profitability.</p>
+              <p>Our system analyzes multiple data points including soil health, weather patterns, historical yield data, and satellite imagery to provide accurate predictions and actionable recommendations.</p>
+              <div className="d-flex">
+                <div className="me-4 text-center">
+                  <div className="stat-number">95%</div>
+                  <div className="stat-label">Prediction Accuracy</div>
+                </div>
+                <div className="me-4 text-center">
+                  <div className="stat-number">10,000+</div>
+                  <div className="stat-label">Farmers Served</div>
+                </div>
+                <div className="text-center">
+                  <div className="stat-number">15</div>
+                  <div className="stat-label">Crop Types</div>
                 </div>
               </div>
             </div>
-            </div>
-        </div>
-      </section>
-
-      <section id="contact" className="py-5 bg-light">
-        <div className="container">
-          <h2 className="text-center section-title">Contact Us</h2>
-          <div className="row">
             <div className="col-lg-6">
-              <form id="contactForm">
-                <div className="mb-3">
-                  <label htmlFor="name" className="form-label">Your Name</label>
-                  <input type="text" className="form-control" id="name" required />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="email" className="form-label">Email Address</label>
-                  <input type="email" className="form-control" id="email" required />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="subject" className="form-label">Subject</label>
-                  <input type="text" className="form-control" id="subject" required />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="message" className="form-label">Message</label>
-                  <textarea className="form-control" id="message" rows={5} required defaultValue={""} />
-                </div>
-                <button type="submit" className="btn btn-primary">Send Message</button>
-              </form>
-            </div>
-            <div className="col-lg-6">
-              <div className="card h-100">
-                <div className="card-body">
-                  <h4>Get In Touch</h4>
-                  <p>We'd love to hear from you. Whether you have questions about our platform, need technical
-                    support, or want to partner with us, reach out to our team.</p>
-                  <div className="mt-4">
-                    <h5><i className="fas fa-map-marker-alt me-2" />Address</h5>
-                    <p>123 Agriculture Street, Vijayawada, Andhra Pradesh 520001</p>
-                    <h5 className="mt-3"><i className="fas fa-phone me-2" />Phone</h5>
-                    <p>+91 98765 43210</p>
-                    <h5 className="mt-3"><i className="fas fa-envelope me-2" />Email</h5>
-                    <p>support@cropyieldpro.com</p>
-                    <h5 className="mt-3"><i className="fas fa-clock me-2" />Business Hours</h5>
-                    <p>Monday - Friday: 9AM - 5PM<br />Saturday: 10AM - 2PM</p>
-                  </div>
-                  </div>
+              <div className="interactive-map">
+                <i className="fas fa-map-marked-alt fa-5x text-muted"></i>
+                <p className="mt-3">Interactive map of Andhra Pradesh showing crop distribution</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Footer */}
       <footer>
         <div className="container">
           <div className="row">
-            <div className="col-lg-4 mb-4 mb-lg-0">
-              <h4 className="text-uppercase mb-4">CropYield Pro</h4>
-              <p>AI-powered crop yield prediction platform designed to help Andhra Pradesh farmers maximize their
-                agricultural productivity through data-driven insights.</p>
-              <div className="mt-3">
+            <div className="col-md-4 mb-4">
+              <h5>CropYield Pro</h5>
+              <p>AI-powered crop yield prediction platform for farmers in Andhra Pradesh.</p>
+              <div>
                 <a href="#" className="social-icon"><i className="fab fa-facebook-f" /></a>
                 <a href="#" className="social-icon"><i className="fab fa-twitter" /></a>
                 <a href="#" className="social-icon"><i className="fab fa-instagram" /></a>
                 <a href="#" className="social-icon"><i className="fab fa-linkedin-in" /></a>
-                <a href="#" className="social-icon"><i className="fab fa-youtube" /></a>
               </div>
             </div>
-            <div className="col-lg-2 col-md-4 mb-4 mb-md-0">
-              <h5 className="text-uppercase mb-4">Quick Links</h5>
+            <div className="col-md-2 mb-4">
+              <h5>Quick Links</h5>
               <ul className="list-unstyled footer-links">
-                <li className="mb-2"><a href="#home">Home</a></li>
-                <li className="mb-2"><a href="#features">Features</a></li>
-                <li className="mb-2"><a href="#prediction">Prediction</a></li>
-                <li className="mb-2"><a href="#crops">Crops</a></li>
-                <li className="mb-2"><a href="#about">About</a></li>
-                <li><a href="#contact">Contact</a></li>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#prediction">Prediction</a></li>
+                <li><a href="#crops">Crops</a></li>
+                <li><a href="#about">About</a></li>
               </ul>
             </div>
-            <div className="col-lg-2 col-md-4 mb-4 mb-md-0">
-              <h5 className="text-uppercase mb-4">Resources</h5>
+            <div className="col-md-3 mb-4">
+              <h5>Resources</h5>
               <ul className="list-unstyled footer-links">
-                <li className="mb-2"><a href="#">Blog</a></li>
-                <li className="mb-2"><a href="#">FAQs</a></li>
-                <li className="mb-2"><a href="#">Tutorials</a></li>
-                <li className="mb-2"><a href="#">Research Papers</a></li>
-                <li><a href="#">Case Studies</a></li>
+                <li><a href="#">Weather Forecast</a></li>
+                <li><a href="#">Soil Health</a></li>
+                <li><a href="#">Crop Calendar</a></li>
+                <li><a href="#">Market Prices</a></li>
+                <li><a href="#">Government Schemes</a></li>
               </ul>
             </div>
-            <div className="col-lg-4 col-md-4">
-              <h5 className="text-uppercase mb-4">Newsletter</h5>
-              <p>Subscribe to our newsletter for the latest updates on agricultural technology and tips.</p>
-              <form className="footer-newsletter">
-                <div className="input-group mb-3">
-                  <input type="email" className="form-control" placeholder="Your email address" aria-label="Email" />
-                  <button className="btn btn-primary" type="button">Subscribe</button>
-                </div>
-              </form>
-              <div className="app-badges mt-3">
-                <p className="mb-2">Download our mobile app:</p>
-                <a href="#"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/320px-Google_Play_Store_badge_EN.svg.png" alt="Google Play" /></a>
-                <a href="#"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Download_on_the_App_Store_Badge.svg/320px-Download_on_the_App_Store_Badge.svg.png" alt="App Store" /></a>
-              </div>
+            <div className="col-md-3 mb-4">
+              <h5>Contact Us</h5>
+              <ul className="list-unstyled">
+                <li><i className="fas fa-map-marker-alt me-2" /> Vijayawada, Andhra Pradesh</li>
+                <li><i className="fas fa-phone me-2" /> +91 9876543210</li>
+                <li><i className="fas fa-envelope me-2" /> info@cropyieldpro.com</li>
+              </ul>
             </div>
           </div>
-          <div className="footer-bottom text-center">
-            <p className="mb-0">© 2023 CropYield Pro. All rights reserved.</p>
-            <div className="mt-2">
-              <a href="#" className="text-white me-3">Privacy Policy</a>
-              <a href="#" className="text-white me-3">Terms of Service</a>
-              <a href="#" className="text-white">Cookie Policy</a>
+          <hr className="my-4" />
+          <div className="row">
+            <div className="col-md-6">
+              <p className="mb-0">&copy; 2023 CropYield Pro. All rights reserved.</p>
+            </div>
+            <div className="col-md-6 text-md-end">
+              <a href="#" className="text-light me-3">Privacy Policy</a>
+              <a href="#" className="text-light">Terms of Service</a>
             </div>
           </div>
         </div>
       </footer>
 
+      {/* Chatbot */}
       <div className="chatbot-container">
-        <div className="chatbot-btn" onClick={() => setShowChatbot(!showChatbot)}>
-          <i className="fas fa-robot fa-2x" />
-        </div>
         {showChatbot && (
-          <div className="chatbot-window flex-show">
+          <div className="chatbot-window">
             <div className="chatbot-header">
-              <h5 className="mb-0">CropYield Assistant</h5>
-              <button className="btn-close btn-close-white" onClick={() => setShowChatbot(false)} />
+              <h6 className="mb-0">CropYield Assistant</h6>
+              <button className="btn btn-sm btn-light" onClick={() => setShowChatbot(false)}>
+                <i className="fas fa-times" />
+              </button>
             </div>
             <div className="chatbot-messages">
-              {messages.map((message, index) => (
-                <div key={index} className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'}`}>
-                  {message.text}
+              {messages.map((msg, index) => (
+                <div key={index} className={`message ${msg.sender === 'bot' ? 'bot-message' : 'user-message'}`}>
+                  {msg.text}
                 </div>
               ))}
             </div>
             <div className="chatbot-input">
-              <input 
-                type="text" 
+              <input
+                type="text"
+                placeholder="Type your message..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Type your message here..." 
               />
-              <button onClick={handleSendMessage}><i className="fas fa-paper-plane" /></button>
+              <button onClick={handleSendMessage}>
+                <i className="fas fa-paper-plane" />
+              </button>
             </div>
           </div>
         )}
-      </div>
-
-      <div className="toast notification-toast" id="notificationToast" style={{display: 'none'}}>
-        <div className="toast-body" id="toastMessage">
-          This is a notification message.
+        <div className="chatbot-btn" onClick={() => setShowChatbot(!showChatbot)}>
+          <i className={`fas ${showChatbot ? 'fa-times' : 'fa-comments'}`} />
         </div>
       </div>
-      
-      <div id="google_translate_element" style={{display: 'none'}} />
+
+      {/* Google Translate Element */}
+      <div id="google_translate_element" style={{display: 'none'}}></div>
     </div>
   );
 };
