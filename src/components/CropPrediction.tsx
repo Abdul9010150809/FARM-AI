@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import Chart from 'chart.js/auto'; // Or import a specific chart type, e.g., 'chart.js/auto'
+ // Or import a specific chart type, e.g., 'chart.js/auto'
+import Chart from "chart.js/auto";
 
 interface Message {
   text: string;
