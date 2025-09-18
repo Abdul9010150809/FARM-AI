@@ -1,54 +1,38 @@
-const axios = require('axios');
+// backend/services/weatherService.js
+import axios from 'axios';
+import config from '../config/index.js';
+import logger from '../utils/logger.js';
 
-class WeatherService {
-  constructor() {
-    this.apiKey = process.env.OPENWEATHER_API_KEY;
-  }
-
-  // Get current weather data
-  async getCurrentWeather(lat, lng) {
-    try {
-      const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${this.apiKey}&units=metric`
-      );
-      
-      return {
-        temperature: response.data.main.temp,
-        humidity: response.data.main.humidity,
-        rainfall: response.data.rain ? response.data.rain['1h'] || 0 : 0,
-        description: response.data.weather[0].description
-      };
-    } catch (error) {
-      console.error('Error fetching weather data:', error);
-      return null;
+/**
+ * Fetches weather data from an external API.
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<object>} - A simplified weather data object.
+ */
+export const fetchWeatherData = async (lat, lon) => {
+  try {
+    const apiKey = config.weatherApiKey;
+    if (!apiKey) {
+      throw new Error('Weather API key is missing from configuration.');
     }
-  }
 
-  // Get weather forecast
-  async getWeatherForecast(lat, lng) {
-    try {
-      const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${this.apiKey}&units=metric`
-      );
-      
-      // Process forecast data for the next 5 days
-      const forecast = response.data.list
-        .filter((item, index) => index % 8 === 0) // Get one reading per day
-        .slice(0, 5) // Next 5 days
-        .map(item => ({
-          date: new Date(item.dt * 1000),
-          temperature: item.main.temp,
-          humidity: item.main.humidity,
-          rainfall: item.rain ? item.rain['3h'] || 0 : 0,
-          description: item.weather[0].description
-        }));
-      
-      return forecast;
-    } catch (error) {
-      console.error('Error fetching weather forecast:', error);
-      return [];
-    }
-  }
-}
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+    
+    const { data } = await axios.get(url);
 
-module.exports = new WeatherService();
+    // Map the complex API response to a simple object our app can use
+    const simplifiedData = {
+      temp: data.main.temp,
+      feels_like: data.main.feels_like,
+      humidity: data.main.humidity,
+      wind: data.wind.speed,
+      description: data.weather[0].description,
+      icon: data.weather[0].icon,
+    };
+
+    return simplifiedData;
+  } catch (error) {
+    logger.error('Error fetching weather data:', error.response ? error.response.data : error.message);
+    throw new Error('Could not retrieve weather data.');
+  }
+};

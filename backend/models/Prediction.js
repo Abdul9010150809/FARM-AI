@@ -1,63 +1,34 @@
-const mongoose = require('mongoose');
+// backend/models/Prediction.js
+import mongoose from 'mongoose';
 
-const PredictionSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  location: {
-    latitude: Number,
-    longitude: Number,
-    address: String
-  },
-  cropType: {
-    type: String,
-    required: true
-  },
-  soilData: {
-    type: {
-      type: String,
-      required: true
+const predictionSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: 'User', // This creates a relationship with the User model
     },
-    ph: Number,
-    nitrogen: Number,
-    phosphorus: Number,
-    potassium: Number,
-    organicMatter: Number
+    input: {
+      nitrogen: { type: Number, required: true },
+      phosphorus: { type: Number, required: true },
+      potassium: { type: Number, required: true },
+      ph: { type: Number },
+      rainfall: { type: Number },
+      temperature: { type: Number },
+      crop: { type: String, required: true },
+    },
+    result: {
+      predictedYield: { type: Number },
+      unit: { type: String },
+      confidenceScore: { type: Number },
+      recommendations: [{ type: String }],
+    },
   },
-  weatherData: {
-    temperature: Number,
-    rainfall: Number,
-    humidity: Number,
-    forecast: [{
-      date: Date,
-      temperature: Number,
-      rainfall: Number,
-      humidity: Number
-    }]
-  },
-  area: {
-    type: Number,
-    required: true
-  },
-  predictedYield: {
-    type: Number,
-    required: true
-  },
-  confidence: {
-    type: Number,
-    default: 0
-  },
-  recommendations: {
-    irrigation: String,
-    fertilization: String,
-    pestControl: String,
-    harvestTiming: String
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  {
+    timestamps: true,
   }
-});
+);
 
-module.exports = mongoose.model('Prediction', PredictionSchema);
+const Prediction = mongoose.model('Prediction', predictionSchema);
+
+export default Prediction;
