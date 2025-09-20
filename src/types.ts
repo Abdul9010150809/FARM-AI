@@ -1,75 +1,88 @@
-export interface Location {
-  address: string;
-  latitude: number;
-  longitude: number;
-  region: string;
-}
+// src/types.ts
 
-export interface FarmDetails {
-  totalArea: number;
-  soilType: string;
-  primaryCrops: string[];
-  irrigationSystem: string;
-}
-
+// --- User and Authentication Types ---
+// ADDED: For user auth in AuthContext
 export interface User {
-  _id?: string;
+  id: string;
   name: string;
   email: string;
-  role: string;
-  location?: Location;
-  farmDetails?: FarmDetails;
 }
 
-export interface PredictionInput {
-  cropType: string;
-  area: number;
-  location?: {
-    latitude: number;
-    longitude: number;
-  };
-  soilType?: string;
-  rainfall?: number;
-  temperature?: number;
-  humidity?: number;
+// --- Notification and Chat Types ---
+// ADDED: For the NotificationToast component
+export interface Notification {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info' | 'warning';
 }
 
-export interface PredictionResult {
-  yield: number;
-  perAcre: number;
-  confidence: number;
-  location: string;
-  weather: {
-    temperature: number;
-    rainfall: number;
-    humidity: number;
-  };
-  soil: {
-    type: string;
-    ph: number;
-    nitrogen: number;
-  };
-  recommendations: {
-    irrigation: string;
-    fertilization: string;
-    pestControl: string;
-    harvestTiming: string;
-  };
-}
-
-export interface WeatherData {
-  temperature: number;
-  humidity: number;
-  rainfall: number;
-}
-
+// ADDED: For the Chatbot component
 export interface Message {
+  id: number;
   text: string;
   sender: 'user' | 'bot';
 }
 
-export interface Notification {
-  message: string;
-  type: 'info' | 'success' | 'error' | 'warning';
-  visible: boolean;
+
+// --- Prediction Dashboard Types ---
+export interface LocationData {
+  city: string;
+  state: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
+// UPDATED: This is now the standard WeatherData object for the whole app
+export interface WeatherData {
+  temp: number; // FIX: Standardized to 'temp' instead of 'temperature'
+  humidity: number;
+  wind_speed: number;
+  main: string;
+  description: string;
+  icon: string;
+  rainfall?: number; // ADDED: Optional rainfall property
+}
+
+export interface SoilData {
+  type: string;
+  ph: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+  moisture: number;
+  organicMatter: number;
+}
+
+export interface OptimizationScenario {
+  title: string;
+  description: string;
+  changes: Record<string, string>;
+  icon: string;
+}
+
+export interface PredictionResult {
+  yield: number;
+  confidence: number;
+  roi: number;
+  sustainabilityScore: number;
+  recommendations: {
+    irrigation: string;
+    fertilization: string;
+    pestControl: string;
+    market: string;
+  };
+  diseaseAlert: {
+    risk: 'Low' | 'Medium' | 'High';
+    details: string;
+  };
+  yieldHistory: number[];
+  costBreakdown: {
+    seeds: number;
+    fertilizers: number;
+    labor: number;
+    irrigation: number;
+    other: number;
+  };
+  optimizationScenarios: OptimizationScenario[];
 }

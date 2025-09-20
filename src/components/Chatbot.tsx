@@ -6,7 +6,7 @@ const Chatbot = () => {
   // State is now managed internally within the component
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { text: "Hello! I'm your agricultural assistant. Ask me about crop predictions, soil health, or weather.", sender: 'bot' }
+    { id: 1, text: "Hello! I'm your agricultural assistant. Ask me about crop predictions, soil health, or weather.", sender: 'bot' }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +22,7 @@ const Chatbot = () => {
   const handleSendMessage = async () => {
     if (inputMessage.trim() === '' || isLoading) return;
 
-    const userMessage: Message = { text: inputMessage, sender: 'user' };
+    const userMessage: Message = { id: Date.now(), text: inputMessage, sender: 'user' };
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
@@ -33,11 +33,11 @@ const Chatbot = () => {
         message: inputMessage,
       });
 
-      const botMessage: Message = { text: response.data.response, sender: 'bot' };
+      const botMessage: Message = { id: Date.now() + 1, text: response.data.response, sender: 'bot' };
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error("Chatbot API error:", error);
-      const errorMessage: Message = { text: "Sorry, I'm having trouble connecting to my knowledge base. Please try again later.", sender: 'bot' };
+      const errorMessage: Message = { id: Date.now() + 2, text: "Sorry, I'm having trouble connecting to my knowledge base. Please try again later.", sender: 'bot' };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -59,8 +59,8 @@ const Chatbot = () => {
             <i className="fa fa-times" onClick={() => setIsOpen(false)}></i>
           </div>
           <div className="chatbot-messages">
-            {messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.sender}`}>
+            {messages.map((msg) => (
+              <div key={msg.id} className={`message ${msg.sender}`}>
                 {msg.text}
               </div>
             ))}

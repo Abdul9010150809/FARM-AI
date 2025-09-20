@@ -67,7 +67,7 @@ const FeaturesSection: React.FC<FeaturesSectionProps> = ({ weatherData }) => {
                     <h3 className="h4">Weather Analysis</h3>
                     <p>Our system analyzes real-time weather data to predict optimal growing conditions.</p>
                     <div className="mt-3">
-                      <span className="badge bg-info me-1">{weatherData.temperature}°C</span>
+                      <span className="badge bg-info me-1">{weatherData.temp}°C</span>
                       <span className="badge bg-primary me-1">{weatherData.humidity}%</span>
                       <span className="badge bg-success">{weatherData.rainfall}mm</span>
                       {/* 2. The button inside is now for visual effect only */}
@@ -80,19 +80,22 @@ const FeaturesSection: React.FC<FeaturesSectionProps> = ({ weatherData }) => {
               </Link>
             </div>
             <div className="col-md-4 mb-4">
-              <div className="feature-card card h-100">
-                <div className="card-body text-center p-4">
-                  <div className="feature-icon">
-                    <i className="fas fa-seedling" />
-                  </div>
-                  <h3 className="h4">Soil Health</h3>
-                  <p>We evaluate soil quality parameters including pH levels, nitrogen content, and soil type to recommend the best crops for your land.</p>
-                  <div className="mt-3">
-                    <span className="badge bg-warning text-dark me-1">pH: 6.5-7.5</span>
-                    <span className="badge bg-info">N: 0.15%</span>
+              {/* Wrap the entire card in a Link pointing to the URL path */}
+              <Link to="/soil-health" className="feature-card-link">
+                <div className="feature-card card h-100">
+                  <div className="card-body text-center p-4">
+                    <div className="feature-icon">
+                      <i className="fas fa-seedling" />
+                    </div>
+                    <h3 className="h4">Soil Health</h3>
+                    <p>We evaluate soil quality parameters including pH levels, nitrogen content, and soil type to recommend the best crops for your land.</p>
+                    <div className="mt-3">
+                      <span className="badge bg-warning text-dark me-1">pH: 6.5-7.5</span>
+                      <span className="badge bg-info">N: 0.15%</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             </div>
             <div className="col-md-4 mb-4">
               <div className="feature-card card h-100">
@@ -533,11 +536,11 @@ const FeaturesSection: React.FC<FeaturesSectionProps> = ({ weatherData }) => {
             <div className="col-md-4 mb-4">
               <div className="card data-card h-100">
                 <div className="card-body text-center">
-                  <i className="fas fa-temperature-high fa-3x text-primary mb-3" />
+                  <i className="fas fa-temp-high fa-3x text-primary mb-3" />
                   <h4>Weather Conditions</h4>
                   <p>Live weather data from across Andhra Pradesh</p>
                   <div className="mt-3">
-                    <span className="badge bg-info me-1" id="weather-temp">{weatherData.temperature}°C</span>
+                    <span className="badge bg-info me-1" id="weather-temp">{weatherData.temp}°C</span>
                     <span className="badge bg-primary me-1" id="weather-humidity">{weatherData.humidity}%</span>
                     <span className="badge bg-success" id="weather-rainfall">{weatherData.rainfall}mm</span>
                   </div>

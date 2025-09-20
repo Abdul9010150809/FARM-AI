@@ -8,7 +8,7 @@ const AboutSection: React.FC = () => {
     { value: 0, label: 'Villages Covered', suffix: '+' }
   ]);
 
-  const [activeFeature, setActiveFeature] = useState(0);
+  // const [activeFeature, setActiveFeature] = useState(0);
 
   useEffect(() => {
     // Animate stats counting up
@@ -31,7 +31,7 @@ const AboutSection: React.FC = () => {
     });
 
     return () => intervals.forEach(interval => clearInterval(interval));
-  }, []);
+  }, [stats]);
 
   const features = [
     {

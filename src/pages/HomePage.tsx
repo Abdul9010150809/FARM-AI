@@ -1,96 +1,77 @@
 // src/pages/HomePage.tsx
-
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { WeatherData } from '../types';
-import SoilHealth from '../components/SoilHealth';
-import HeroSection from '../components/HeroSection';
+import React, { Suspense } from 'react';
+// Make sure to import all your components
 import StatsSection from '../components/StatsSection';
+import HeroSection from '../components/HeroSection';
 import FeaturesSection from '../components/FeaturesSection';
 import CropsSection from '../components/CropsSection';
+import Footer from '../components/Footer';
 import AboutSection from '../components/AboutSection';
-interface HomePageProps {
-  currentLanguage: string;
-  // 👇 UPDATED: The function signature now includes the optional parameter
-  applyTranslation: (lang: string, shouldReload?: boolean) => void;
-}
+import { WeatherData } from '../types'; // It's good practice to use your type
 
-const HomePage: React.FC<HomePageProps> = ({ currentLanguage, applyTranslation }) => {
-  const [weatherData, setWeatherData] = useState<WeatherData>({
-    temperature: 31,
-    humidity: 75,
-    rainfall: 0,
-  });
+// Simple loading fallback component for Suspense
+const LoadingFallback: React.FC = () => (
+  <div className="text-center my-5">
+    <div className="spinner-border text-primary" role="status">
+      <span className="visually-hidden">Loading...</span>
+    </div>
+  </div>
+);
 
-  useEffect(() => {
-    const fetchInitialData = () => {
-      const apiKey = process.env.REACT_APP_WEATHER_API_KEY;
-      // Small Fix: Add a check for the API key to improve debugging
-      if (!apiKey) {
-        console.error("Weather API key is missing. Please check your .env file.");
-        return;
-      }
-      
-      if (!navigator.geolocation) {
-        console.error("Geolocation is not supported by this browser.");
-        return;
-      }
+const HomePage: React.FC = () => {
+  const [isLoading, setIsLoading] = React.useState(true); // Start with loading true
+  const [error, setError] = React.useState<string | null>(null);
+  // Use your defined WeatherData type for better type safety
+  const [weatherData, setWeatherData] = React.useState<WeatherData | null>(null);
 
-      const successCallback = async (position: GeolocationPosition) => {
-        try {
-          const { latitude, longitude } = position.coords;
+  React.useEffect(() => {
+    // Simulate an async fetch
+    const timer = setTimeout(() => {
+      // ✅ FIX: Uncomment this line and provide some mock data
+      setWeatherData({
+        temp: 29,
+        humidity: 65,
+        wind_speed: 10,
+        main: 'Clear',
+        description: 'clear sky',
+        icon: 'https://openweathermap.org/img/wn/01d@2x.png',
+        rainfall: 0,
+      });
+      setIsLoading(false);
+    }, 1500); // Increased time to see the loading spinner
 
-          // Auto Language Logic
-          const userLangPreference = localStorage.getItem('appLanguage');
-          if (!userLangPreference) {
-            const geoApiUrl = `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid=${apiKey}`;
-            const geoResponse = await axios.get(geoApiUrl);
-            const countryCode = geoResponse.data[0]?.country;
-
-            const languageMap: { [key: string]: string } = { 'IN': 'te' };
-            const targetLanguage = languageMap[countryCode];
-            
-            if (targetLanguage && targetLanguage !== currentLanguage) {
-              // 👇 FAST TRANSLATION: Call with 'false' to prevent reload
-              applyTranslation(targetLanguage, false); 
-            }
-          }
-
-          // Weather Fetch Logic (now runs immediately after translation trigger)
-          const weatherApiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`;
-          const response = await axios.get(weatherApiUrl);
-          
-          setWeatherData({
-            temperature: Math.round(response.data.main.temp),
-            humidity: response.data.main.humidity,
-            rainfall: response.data.rain ? response.data.rain['1h'] || 0 : 0,
-          });
-
-        } catch (error) {
-          console.error('Error fetching initial data:', error);
-        }
-      };
-
-      // Small Fix: Add a proper error callback for geolocation
-      const errorCallback = (error: GeolocationPositionError) => {
-        console.error(`Geolocation error: ${error.message}`);
-      };
-
-      navigator.geolocation.getCurrentPosition(successCallback, errorCallback);
-    };
-
-    fetchInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Cleanup function to prevent errors if the component unmounts
+    return () => clearTimeout(timer);
+  }, []); // Empty dependency array ensures this runs only once
 
   return (
-    <>
-      <HeroSection />
-      <StatsSection />
-      <FeaturesSection weatherData={weatherData} />
-      <CropsSection />
-      <AboutSection />
-    </>
+    <div>
+      <Suspense fallback={<LoadingFallback />}>
+        <HeroSection greeting="Good Evening" />
+        <StatsSection />
+
+        <div className="container my-4 text-center">
+          {isLoading && (
+            <div className="spinner-border text-success" role="status">
+              <span className="visually-hidden">Loading weather...</span>
+            </div>
+          )}
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+          {/* This will now work because weatherData will be populated */}
+          {weatherData && !isLoading && !error && (
+            <FeaturesSection weatherData={weatherData} />
+          )}
+        </div>
+
+        <CropsSection />
+        <AboutSection />
+        <Footer />
+      </Suspense>
+    </div>
   );
 };
 

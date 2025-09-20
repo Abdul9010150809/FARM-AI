@@ -1,70 +1,59 @@
 // src/App.tsx
-
-import React, { useState, useEffect } from 'react';
+import React, { Suspense } from 'react';
+// FIX: Removed BrowserRouter as it's already in index.tsx
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// --- Global Components ---
 import Navbar from './components/Navbar';
-import HomePage from './pages/HomePage';
-import PredictionPage from './components/PredictionPage';
-import WeatherAnalysis from './components/WeatherAnalysis';
-const setCookie = (name: string, value: string, days: number) => {
-  let expires = "";
-  if (days) {
-    const date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = "; expires=" + date.toUTCString();
-  }
-  document.cookie = name + "=" + (value || "") + expires + "; path=/";
-};
+import Footer from './components/Footer';
+import Chatbot from './components/Chatbot';
+
+// --- Page Components ---
+const HomePage = React.lazy(() => import('./pages/HomePage'));
+const PredictionAndOptimizationPage = React.lazy(() => import('./pages/PredictionAndOptimizationPage'));
+const SoilHealthPage = React.lazy(() => import('./pages/SoilHealthPage'));
+// FIX: Import the correct page component
+const WeatherAnalysisPage = React.lazy(() => import('./pages/WeatherAnalysisPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+
+const PageLoader = () => (
+  <div className="d-flex justify-content-center align-items-center" style={{ height: '80vh' }}>
+    <div className="spinner-border text-success" style={{ width: '3rem', height: '3rem' }} />
+  </div>
+);
+
+const NotFoundPage = () => (
+  <div className="container text-center my-5 py-5">
+    <h1 className="display-1 fw-bold">404</h1>
+    <p className="lead">Oops! The page you're looking for could not be found.</p>
+    <a href="/" className="btn btn-success mt-3">Go to Homepage</a>
+  </div>
+);
 
 const App: React.FC = () => {
-  const [currentLanguage, setCurrentLanguage] = useState<string>(
-    localStorage.getItem('appLanguage') || 'en'
-  );
-
-  const applyTranslation = (lang: string) => {
-    setCurrentLanguage(lang);
-    localStorage.setItem('appLanguage', lang);
-    setCookie('googtrans', `/en/${lang}`, 1);
-    window.location.reload();
-  };
-
-  useEffect(() => {
-    const savedLang = localStorage.getItem('appLanguage') || 'en';
-    if (document.cookie.indexOf('googtrans') === -1) {
-      setCookie('googtrans', `/en/${savedLang}`, 1);
-    }
-    (window as any).googleTranslateElementInit = () => {
-      new (window as any).google.translate.TranslateElement(
-        { pageLanguage: 'en' },
-        'google_translate_element'
-      );
-    };
-    if (!document.querySelector('#google-translate-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-translate-script';
-      script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
-
   return (
+    // FIX: NO <Router> here. It should only be in your src/index.tsx file.
     <AuthProvider>
-      {/* <Navbar currentLanguage={currentLanguage} applyTranslation={applyTranslation} /> */}
-      <main>
-        <Routes>
-          {/* 👇 FIX: Pass the required props to the HomePage component here */}
-          <Route
-            path="/"
-            element={<HomePage applyTranslation={applyTranslation} currentLanguage={currentLanguage} />}
-          />
-          <Route path="/prediction" element={<PredictionPage />} />
-          
-          {/* This route is commented out until you create the ProfilePage.tsx file */}
-          {/* <Route path="/profile" element={<ProfilePage />} /> */}
-        </Routes>
+      <Navbar />
+      <main className="main-content">
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/prediction" element={<PredictionAndOptimizationPage />} />
+              <Route path="/soil-health" element={<SoilHealthPage />} />
+              {/* FIX: Use the correctly imported WeatherAnalysisPage component */}
+              <Route path="/weather-analysis" element={<WeatherAnalysisPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
+      <Chatbot />
+      <Footer />
     </AuthProvider>
   );
 };

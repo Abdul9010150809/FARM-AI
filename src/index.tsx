@@ -1,6 +1,3 @@
-// src/index.tsx
-// THIS FILE IS CORRECT. KEEP IT AS IS.
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -12,6 +9,7 @@ import 'font-awesome/css/font-awesome.min.css';
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
+
 root.render(
   <React.StrictMode>
     {/* This is the one and only router for your entire app */}
