@@ -10,16 +10,26 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- MongoDB Connection ---
+// --- MongoDB Connection ---
 const connectDB = async () => {
   try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
+    }
+
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // Remove useNewUrlParser and useUnifiedTopology for newer Mongoose
+      // useNewUrlParser: true,    // Remove this line
+      // useUnifiedTopology: true, // Remove this line
     });
+    
     console.log(`MongoDB Connected: ${conn.connection.host} ✅`);
+    console.log(`Database: ${conn.connection.name} ✅`);
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message} ❌`);
-    process.exit(1);
+    console.error('Connection string:', process.env.MONGODB_URI ? 'Present' : 'Missing');
+    // Don't exit process in production, just use mock data
+    console.log('Continuing with mock data mode...');
   }
 };
 
