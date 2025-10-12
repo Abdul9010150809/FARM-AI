@@ -38,7 +38,9 @@ jobs:
         echo "REACT_APP_CHATBOT_URL=https://cropyield-pro.onrender.com" >> .env.production
 
     - name: Build React app
-      run: pnpm run build
+      run: |
+        rm -rf build
+        pnpm run build
 
     - name: Setup Pages
       uses: actions/configure-pages@v5

@@ -1,6 +1,7 @@
 {
   "name": "cropyield-pro",
   "version": "0.1.0",
+  "homepage": "https://abdul9010150809.github.io/cropyield-pro",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
