@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -50,17 +50,14 @@ export const authAPI = {
 
 // Prediction API calls
 export const predictionAPI = {
-  predict: (data: any) => 
-    api.post('/predictions/predict', data),
-  
-  getHistory: () => 
-    api.get('/predictions/history'),
-  
-  getSoilData: (lat: number, lng: number) => 
-    api.get('/soil-data', { params: { lat, lng } }),
-  
-  getWeatherData: (lat: number, lng: number) => 
-    api.get('/weather/current', { params: { lat, lng } }),
+  predict: (data: any) =>
+    api.post('/predict', data),
+
+  getSoilData: (lat: number, lng: number) =>
+    api.get('/soil', { params: { lat, lng } }),
+
+  getWeatherData: (lat: number, lng: number) =>
+    api.get('/weather', { params: { lat, lng } }),
 };
 
 // Chatbot API call
