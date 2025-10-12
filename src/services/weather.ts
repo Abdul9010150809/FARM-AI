@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-const OPENWEATHER_API_KEY = process.env.REACT_APP_OPENWEATHER_API_KEY;
+const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY as string;
 
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://cropyield-backend.onrender.com'  // Your Render backend URL
+  : 'http://localhost:5000';
 export const getCurrentWeather = async (latitude: number, longitude: number) => {
   try {
     const response = await axios.get(

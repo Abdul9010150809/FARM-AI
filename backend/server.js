@@ -19,7 +19,36 @@ const app = express();
 const PORT = process.env.PORT || config.port || 5000;
 
 // --- Core Middleware ---
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+// --- Core Middleware ---
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'https://your-username.github.io', // Your GitHub Pages URL
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://cropyield-pro.vercel.app', // If using Vercel
+      'https://cropyield-pro.netlify.app' // If using Netlify
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 app.use(express.json()); // To parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // To parse URL-encoded bodies
 app.listen(PORT, () => {
