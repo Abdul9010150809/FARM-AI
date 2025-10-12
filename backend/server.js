@@ -16,13 +16,12 @@ import soilHealthRoutes from './routes/soilHealthRoutes.js';
 // --- Initial Setup ---
 connectDB(); // Connect to MongoDB
 const app = express();
-const PORT = config.port;
+const PORT = process.env.PORT || config.port || 5000;
 
 // --- Core Middleware ---
 app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // To parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // To parse URL-encoded bodies
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
