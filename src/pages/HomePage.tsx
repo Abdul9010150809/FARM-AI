@@ -1,11 +1,11 @@
 // src/pages/HomePage.tsx
 import React, { Suspense } from 'react';
 // Make sure to import all your components
-import StatsSection from '../components/StatsSection';
+// import StatsSection from '../components/StatsSection';
 import HeroSection from '../components/HeroSection';
 import FeaturesSection from '../components/FeaturesSection';
 import CropsSection from '../components/CropsSection';
-import Footer from '../components/Footer';
+// import Footer from '../components/Footer';
 import AboutSection from '../components/AboutSection';
 import { WeatherData } from '../types'; // It's good practice to use your type
 
@@ -20,7 +20,7 @@ const LoadingFallback: React.FC = () => (
 
 const HomePage: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(true); // Start with loading true
-  const [error, setError] = React.useState<string | null>(null);
+  const [error] = React.useState<string | null>(null);
   // Use your defined WeatherData type for better type safety
   const [weatherData, setWeatherData] = React.useState<WeatherData | null>(null);
 
@@ -48,7 +48,7 @@ const HomePage: React.FC = () => {
     <div>
       <Suspense fallback={<LoadingFallback />}>
         <HeroSection greeting="Good Evening" />
-        <StatsSection />
+        
 
         <div className="container my-4 text-center">
           {isLoading && (
@@ -69,7 +69,7 @@ const HomePage: React.FC = () => {
 
         <CropsSection />
         <AboutSection />
-        <Footer />
+        {/* <Footer /> */}
       </Suspense>
     </div>
   );

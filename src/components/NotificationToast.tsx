@@ -1,5 +1,4 @@
 import React from 'react';
-import { Notification } from '../types';
 
 interface NotificationToastProps {
   message: string;

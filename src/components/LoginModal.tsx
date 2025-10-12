@@ -207,14 +207,19 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLogin, onShowR
             color: #718096;
           }
           
-          .register-link a {
+          .link-button {
             color: #2e7d32;
             text-decoration: none;
             font-weight: 600;
             transition: color 0.2s ease;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-size: inherit;
           }
-          
-          .register-link a:hover {
+
+          .link-button:hover {
             color: #7cb342;
             text-decoration: underline;
           }
@@ -304,7 +309,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLogin, onShowR
             </button>
             
             <div className="register-link">
-              <p>Don't have an account? <a href="#" onClick={onShowRegister}>Create one</a></p>
+              <p>Don't have an account? <button onClick={onShowRegister} className="link-button">Create one</button></p>
             </div>
           </div>
         </div>

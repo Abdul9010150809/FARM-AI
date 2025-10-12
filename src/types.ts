@@ -42,6 +42,8 @@ export interface WeatherData {
   description: string;
   icon: string;
   rainfall?: number; // ADDED: Optional rainfall property
+  visibility?: number; // ADDED: Optional visibility property
+  daily_rainfall?: number; // ADDED: Optional daily rainfall property
 }
 
 export interface SoilData {

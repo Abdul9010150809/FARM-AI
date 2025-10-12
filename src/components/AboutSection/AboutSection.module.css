@@ -1,0 +1,74 @@
+/* src/components/AboutSection/AboutSection.module.css */
+.sectionTitle {
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.subheading {
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+.statNumber {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2e7d32; /* A nice green color */
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.featureCard {
+  transition: all 0.3s ease;
+  border: 1px solid #e9ecef;
+}
+
+.featureCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  border-color: transparent;
+}
+
+.featureIcon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #2e7d32;
+}
+
+.teamCard {
+  transition: all 0.3s ease;
+}
+
+.teamCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.socialLinks a {
+  color: #6c757d;
+  transition: color 0.3s ease;
+}
+
+.socialLinks a:hover {
+  color: #2e7d32 !important;
+}
+
+.techItem, .partnerLogo {
+  transition: all 0.3s ease;
+}
+
+.techItem:hover, .partnerLogo:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.07);
+}
+
+.partnerLogo {
+  opacity: 0.7;
+}
+
+.partnerLogo:hover {
+  opacity: 1;
+}

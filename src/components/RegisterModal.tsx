@@ -341,12 +341,20 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ show, onClose, on
             margin-top: 16px;
           }
           
-          .terms-text a {
+          .link-button {
             color: #2e7d32;
             text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s ease;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-size: inherit;
           }
-          
-          .terms-text a:hover {
+
+          .link-button:hover {
+            color: #7cb342;
             text-decoration: underline;
           }
         `}
@@ -446,7 +454,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ show, onClose, on
             </form>
             
             <p className="terms-text">
-              By creating an account, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+              By creating an account, you agree to our <button className="link-button">Terms of Service</button> and <button className="link-button">Privacy Policy</button>
             </p>
             
             <div className="divider">
@@ -464,7 +472,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ show, onClose, on
             </button>
             
             <div className="login-link">
-              <p>Already have an account? <a href="#" onClick={onShowLogin}>Sign in</a></p>
+              <p>Already have an account? <button onClick={onShowLogin} className="link-button">Sign in</button></p>
             </div>
           </div>
         </div>
