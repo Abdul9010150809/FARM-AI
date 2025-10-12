@@ -18,12 +18,15 @@ const LoadingFallback: React.FC = () => (
   </div>
 );
 
-const HomePage: React.FC = () => {
+interface HomePageProps {
+  isApiHealthy: boolean;
+}
+
+const HomePage: React.FC<HomePageProps> = ({ isApiHealthy }) => {
   const [isLoading, setIsLoading] = React.useState(true); // Start with loading true
   const [error] = React.useState<string | null>(null);
   // Use your defined WeatherData type for better type safety
   const [weatherData, setWeatherData] = React.useState<WeatherData | null>(null);
-
   React.useEffect(() => {
     // Simulate an async fetch
     const timer = setTimeout(() => {
@@ -48,7 +51,12 @@ const HomePage: React.FC = () => {
     <div>
       <Suspense fallback={<LoadingFallback />}>
         <HeroSection greeting="Good Evening" />
-        
+
+        {!isApiHealthy && (
+          <div className="alert alert-warning mt-3 text-center">
+            <strong>Demo Mode:</strong> Currently using mock data. Some features may be limited.
+          </div>
+        )}
 
         <div className="container my-4 text-center">
           {isLoading && (

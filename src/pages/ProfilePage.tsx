@@ -2,7 +2,11 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-const ProfilePage: React.FC = () => {
+interface ProfilePageProps {
+  isApiHealthy: boolean;
+}
+
+const ProfilePage: React.FC<ProfilePageProps> = ({ isApiHealthy }) => {
   const { user } = useAuth();
 
   return (

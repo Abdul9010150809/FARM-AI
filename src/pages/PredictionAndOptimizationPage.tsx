@@ -31,7 +31,11 @@ ChartJS.register(
   Legend
 );
 
-const PredictionAndOptimizationPage: React.FC = () => {
+interface PredictionAndOptimizationPageProps {
+  isApiHealthy: boolean;
+}
+
+const PredictionAndOptimizationPage: React.FC<PredictionAndOptimizationPageProps> = ({ isApiHealthy }) => {
   const { user, showNotification } = useAuth();
   
   const { location, weather, soil, isLoading: isLoadingData, error: dataError } = useRealtimeData(showNotification);

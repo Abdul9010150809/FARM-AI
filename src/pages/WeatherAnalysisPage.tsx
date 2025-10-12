@@ -3,7 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { WeatherData } from '../types';
 
-const WeatherAnalysisPage: React.FC = () => {
+interface WeatherAnalysisPageProps {
+  isApiHealthy: boolean;
+}
+
+const WeatherAnalysisPage: React.FC<WeatherAnalysisPageProps> = ({ isApiHealthy }) => {
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -23,7 +23,11 @@ const CloseIcon = () => (
 );
 
 
-export const Chatbot = () => {
+interface ChatbotProps {
+  isApiHealthy: boolean;
+}
+
+export const Chatbot: React.FC<ChatbotProps> = ({ isApiHealthy }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, text: 'Hello! How can I help you today?', sender: 'bot' }

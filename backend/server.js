@@ -1,8 +1,10 @@
-// backend/server.js
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-require('dotenv').config();
+// backend/server.js - ES Module Version
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,16 +75,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Simple in-memory storage for demo (replace with MongoDB models later)
+// Simple in-memory storage for demo
 const users = [];
 const predictions = [];
 
-// Mock Auth Routes (you can replace with real MongoDB models later)
+// Mock Auth Routes
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   
   if (email && password) {
-    // For demo - in real app, you'd verify against MongoDB
     res.json({
       token: 'jwt-token-' + Date.now(),
       user: {
@@ -101,12 +102,11 @@ app.post('/api/auth/register', (req, res) => {
   const { name, email, password } = req.body;
   
   if (name && email && password) {
-    // For demo - in real app, you'd save to MongoDB
     const newUser = {
       _id: (users.length + 1).toString(),
       name,
       email,
-      password, // In real app, hash this!
+      password,
       role: 'farmer',
       createdAt: new Date()
     };
@@ -150,7 +150,6 @@ app.post('/api/predict', (req, res) => {
     }
   };
   
-  // Store prediction
   predictions.push(prediction);
   
   res.json({ 
@@ -164,7 +163,7 @@ app.post('/api/predict', (req, res) => {
 app.get('/api/predictions', (req, res) => {
   res.json({
     success: true,
-    data: predictions.slice(-10).reverse() // Last 10 predictions
+    data: predictions.slice(-10).reverse()
   });
 });
 
@@ -238,8 +237,8 @@ app.post('/api/chat', (req, res) => {
 // --- Start Server ---
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌱 Health check: https://cropyield-pro.onrender.com`);
+  console.log(`🌱 Health check available`);
   console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Connecting...'}`);
 });
 
-module.exports = app;
+export default app;

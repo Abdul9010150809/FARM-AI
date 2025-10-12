@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Use environment variable for API base URL
@@ -88,4 +89,27 @@ export const checkAPIHealth = async () => {
     console.warn('Backend API not available, using mock data');
     return false;
   }
+};
+
+// Custom hook for API health check
+export const useApiHealth = () => {
+  const [isApiHealthy, setIsApiHealthy] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const healthy = await checkAPIHealth();
+        setIsApiHealthy(healthy);
+      } catch (error) {
+        setIsApiHealthy(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkHealth();
+  }, []);
+
+  return { isApiHealthy, loading };
 };
