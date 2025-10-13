@@ -5,7 +5,7 @@
 ![Category](https://img.shields.io/badge/Category-Software-success)
 ![Theme](https://img.shields.io/badge/Theme-Agriculture%20%26%20FoodTech-brightgreen)
 
-## 🏆 Smart India Hackathon 2023 Submission
+## 🏆 Smart India Hackathon 2025 Submission
 
 **Problem Statement ID:** `25044`  
 **Problem Statement Title:** **AI-Powered Crop Yield Prediction and Optimization**  
